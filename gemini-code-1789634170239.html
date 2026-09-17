@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 1:1 매칭 플랫폼</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+        body { background-color: #f0f2f5; padding: 20px; color: #333; }
+        
+        .header { text-align: center; margin-bottom: 24px; }
+        .header h1 { font-size: 24px; color: #1a1a1a; margin-bottom: 8px; }
+        
+        /* 2열 레이아웃 */
+        .main-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+        
+        .card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            flex: 1;
+            min-width: 320px;
+        }
+
+        h2 { font-size: 18px; margin-bottom: 16px; border-bottom: 2px solid #f0f2f5; padding-bottom: 8px; }
+        
+        /* 폼 스타일 */
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: #666; }
+        input, select, textarea {
+            width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+        }
+        button {
+            width: 100%; padding: 12px; background: #2563eb; color: #fff; border: none;
+            border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background: #1d4ed8; }
+        
+        /* 등록된 사용자 카드 리스트 */
+        .host-card {
+            border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+            background: #fafafa; transition: border-color 0.2s;
+        }
+        .host-card:hover { border-color: #2563eb; }
+        .host-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .host-name { font-weight: bold; font-size: 16px; color: #1f2937; }
+        .host-meta { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+        .host-purpose { font-size: 13px; color: #374151; background: #fff; padding: 8px; border-radius: 4px; margin-bottom: 12px; }
+
+        /* 예약된 시간 목록 표시 */
+        .booking-list { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+        .booking-item { font-size: 12px; background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; margin-top: 4px; }
+        
+        /* 미팅 신청 폼 (열기/닫기) */
+        .apply-box { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ddd; }
+        .btn-apply { background: #10b981; margin-top: 8px; }
+        .btn-apply:hover { background: #059669; }
+        .btn-delete { background: #ef4444; width: auto; padding: 4px 8px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🤝 1:1 실시간 매칭 & 미팅 플랫폼</h1>
+    <p>호스트로 등록하거나, 원하는 상대에게 실시간으로 미팅을 신청해보세요.</p>
+</div>
+
+<div class="main-container">
+    <!-- 왼쪽: 호스트(사용자) 등록 창 -->
+    <div class="card">
+        <h2>1. 호스트 등록하기</h2>
+        <form id="registerForm">
+            <div class="form-group">
+                <label>이름</label>
+                <input type="text" id="regName" placeholder="예: 홍길동" required>
+            </div>
+            <div class="form-group">
+                <label>소속 / 직함</label>
+                <input type="text" id="regAffiliation" placeholder="예: AAA 스타트업 대표" required>
+            </div>
+            <div class="form-group">
+                <label>만나고 싶은 사람 / 목적</label>
+                <textarea id="regPurpose" rows="3" placeholder="예: 프론트엔드 개발자분들과 커피챗 하고 싶습니다." required></textarea>
+            </div>
+            <button type="submit">프로필 등록하기</button>
+        </form>
+    </div>
+
+    <!-- 오른쪽: 등록된 리스트 확인 및 즉시 신청 창 -->
+    <div class="card">
+        <h2>2. 실시간 등록 목록 및 미팅 신청</h2>
+        <div id="hostList">
+            <!-- JavaScript로 동적 생성됨 -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. 데이터 저장소 (localStorage에서 가져오기)
+    // 데이터 구조: [{ id: 1698000000, name: "", affiliation: "", purpose: "", bookings: [] }]
+    let hosts = JSON.parse(localStorage.getItem('match_hosts')) || [];
+
+    // 2. 화면에 호스트 목록 렌더링 함수
+    function renderHosts() {
+        const hostListContainer = document.getElementById('hostList');
+        hostListContainer.innerHTML = '';
+
+        if (hosts.length === 0) {
+            hostListContainer.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">등록된 호스트가 없습니다. 왼쪽에 프로필을 등록해 보세요!</p>';
+            return;
+        }
+
+        hosts.forEach(host => {
+            const card = document.createElement('div');
+            card.className = 'host-card';
+
+            // 예약 내역 HTML 생성
+            let bookingsHtml = '';
+            if (host.bookings && host.bookings.length > 0) {
+                bookingsHtml = host.bookings.map(b => 
+                    `<div class="booking-item">📅 ${b.time.replace('T', ' ')} - ${b.applicant}님 (${b.purpose})</div>`
+                ).join('');
+            } else {
+                bookingsHtml = '<div style="font-size:12px; color:#aaa;">아직 예약된 미팅이 없습니다.</div>';
+            }
+
+            card.innerHTML = `
+                <div class="host-header">
+                    <span class="host-name">${host.name}</span>
+                    <button class="btn-delete" onclick="deleteHost(${host.id})">삭제</button>
+                </div>
+                <div class="host-meta">소속: ${host.affiliation}</div>
+                <div class="host-purpose">${host.purpose}</div>
+                
+                <div class="booking-list">
+                    <strong>[확정된 미팅 목록]</strong>
+                    ${bookingsHtml}
+                </div>
+
+                <button class="btn-apply" onclick="toggleApplyForm(${host.id})">이 사람과 미팅 신청하기</button>
+
+                <!-- 미팅 신청 입력 폼 (기본 숨김) -->
+                <div class="apply-box" id="apply-box-${host.id}">
+                    <div class="form-group">
+                        <label>신청자 이름</label>
+                        <input type="text" id="app-name-${host.id}" placeholder="내 이름">
+                    </div>
+                    <div class="form-group">
+                        <label>신청 목적</label>
+                        <input type="text" id="app-purpose-${host.id}" placeholder="미팅 목적">
+                    </div>
+                    <div class="form-group">
+                        <label>희망 일시</label>
+                        <input type="datetime-local" id="app-time-${host.id}">
+                    </div>
+                    <button type="button" style="background:#059669;" onclick="submitBooking(${host.id})">선택한 시간으로 예약 제출</button>
+                </div>
+            `;
+            hostListContainer.appendChild(card);
+        });
+    }
+
+    // 3. 호스트 새로 등록 이벤트
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // 고유 DATA Index (타임스탬프 기반) 생성
+        const newHost = {
+            id: Date.now(),
+            name: document.getElementById('regName').value,
+            affiliation: document.getElementById('regAffiliation').value,
+            purpose: document.getElementById('regPurpose').value,
+            bookings: [] // 예약 리스트를 담을 배열
+        };
+
+        hosts.push(newHost);
+        saveAndRefresh();
+        
+        // 폼 초기화
+        this.reset();
+    });
+
+    // 4. 미팅 신청 폼 토글
+    function toggleApplyForm(hostId) {
+        const box = document.getElementById(`apply-box-${hostId}`);
+        box.style.display = box.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // 5. 미팅 신청 제출 이벤트
+    function submitBooking(hostId) {
+        const applicant = document.getElementById(`app-name-${hostId}`).value;
+        const purpose = document.getElementById(`app-purpose-${hostId}`).value;
+        const time = document.getElementById(`app-time-${hostId}`).value;
+
+        if (!applicant || !purpose || !time) {
+            alert('모든 필드를 입력해 주세요.');
+            return;
+        }
+
+        // 해당하는 Data Index(id)를 찾아 예약 정보 추가
+        const host = hosts.find(h => h.id === hostId);
+        if (host) {
+            host.bookings.push({
+                applicant: applicant,
+                purpose: purpose,
+                time: time
+            });
+
+            saveAndRefresh();
+            alert(`${host.name}님에게 미팅 신청이 완료되었습니다!`);
+        }
+    }
+
+    // 6. 호스트 삭제
+    function deleteHost(hostId) {
+        if(confirm('정말 삭제하시겠습니까?')) {
+            hosts = hosts.filter(h => h.id !== hostId);
+            saveAndRefresh();
+        }
+    }
+
+    // 7. localStorage 저장 및 화면 갱신 통합 함수
+    function saveAndRefresh() {
+        localStorage.setItem('match_hosts', JSON.stringify(hosts));
+        renderHosts();
+    }
+
+    // 초기 로딩 시 데이터 출력
+    renderHosts();
+</script>
+
+</body>
+</html>
